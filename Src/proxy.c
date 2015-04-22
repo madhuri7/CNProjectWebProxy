@@ -13,33 +13,36 @@
 
 #include "proxy.h"
 
-char *blacklisted_urls[] = { "www.facebook.com", "www.youtube.com", "www.hulu.com","www.virus.com" };
-int blacklisted_urls_len = 3;
+char *url_blacklist[] = { "www.facebook.com", "www.youtube.com", "www.hulu.com","www.virus.com" };
+int url_blacklist_len = 4;
 
-char *blacklisted_words[] = {"fake", "fixer", "algorithms"};
-int blacklisted_words_len = 3;
+char *word_blacklist[] = {"Alcoholic","Amateur","Analphabet","Anarchist","Ape","Arse","Arselicker","Ass","Ass master","Ass-kisser","Ass-nugget","Ass-wipe","Asshole","Baby","Backwoodsman","Balls","Bandit","Barbar","Bastard","Bastard","Beavis","Beginner","Biest","Bitch","Blubber gut","Bogeyman","Booby","Boozer","Bozo","Brain-fart","Brainless","Brainy","Brontosaurus","Brownie","Bugger","Bugger", "silly","Bulloks","Bum","Bum-fucker","Butt","Buttfucker","Butthead","Callboy","Callgirl","Camel","Cannibal","Cave man","Chaavanist","Chaot","Chauvi","Cheater","Chicken","Children fucker","Clit","Clown","Cock","Cock master","Cock up","Cockboy","Cockfucker","Cockroach","Coky","Con merchant","Con-man","Country bumpkin","Cow","Creep","Creep","Cretin","Criminal","Cunt","Cunt sucker","Daywalker","Deathlord","Derr brain","Desperado","Devil","Dickhead","Dinosaur","Disguesting packet","Diz brain","Do-Do","Dog","Dog, dirty","Dogshit","Donkey","Drakula","Dreamer","Drinker","Drunkard","Dufus","Dulles","Dumbo","Dummy","Dumpy","Egoist","Eunuch","Exhibitionist","Fake","Fanny","Farmer","Fart","Fart, shitty","Fatso","Fellow","Fibber","Fish","Fixer","Flake","Flash Harry","Freak","Frog","Fuck","Fuck face","Fuck head","Fuck noggin","Fucker","Head, fat","Hell dog","Hillbilly","Hooligan","Horse fucker","Idiot","Ignoramus","Jack-ass","Jerk","Joker","Junkey","Killer","Lard face","Latchkey child","Learner","Liar","Looser","Lucky","Lumpy","Luzifer","Macho","Macker","Man, old","Minx","Missing link","Monkey","Monster","Motherfucker","Mucky pub","Mutant","Neanderthal","Nerfhearder","Nobody","Nurd","Nuts, numb","Oddball","Oger","Oil dick","Old fart","Orang-Uthan","Original","Outlaw","Pack","Pain in the ass","Pavian","Pencil dick","Pervert","Pig","Piggy-wiggy","Pirate","Pornofreak","Prick","Prolet","Queer","Querulant","Rat","Rat-fink","Reject","Retard","Riff-Raff","Ripper","Roboter","Rowdy","Rufian","Sack","Sadist","Saprophyt","Satan","Scarab","Schfincter","Shark","Shit eater","Shithead","Simulant","Skunk","Skuz bag","Slave","Sleeze","Sleeze bag","Slimer","Slimy bastard","Small pricked","Snail","Snake","Snob","Snot","Son of a bitch ","Square","Stinker","Stripper","Stunk","Swindler","Swine","Teletubby","Thief","Toilett cleaner","Tussi","Typ","Unlike","Vampir","Vandale","Varmit","Wallflower","Wanker","Wanker, bloody","Weeze Bag","Whore","Wierdo","Wino","Witch","Womanizer","Woody allen","Worm","Xena","Xenophebe","Xenophobe","XXX Watcher","Yak","Yeti","Zit face"};
+int word_blacklist_len = 237;
+
 
 int main(int argc, char **argv)
 {
-	pid_t chpid;
+	
+    //Declaration of sockets and size variables
+    pid_t proc_id;
 	struct sockaddr_in addr_in, cli_addr, serv_addr;
 	struct hostent *hostent;
-	int sockfd, newsockfd;
+	int socket_id, newsocket_id;
 	int clilen = sizeof(cli_addr);
 	struct stat st = {0};
 	
-	// takes port number as argument
 	if(argc != 2)
 	{
-		printf("Using:\n\t%s <port>\n", argv[0]);
+		//checking for arguments
+        printf("Using the following port:\n\t%s <port>\n", argv[0]);
 		return -1;
 	}
   
-	printf("Proxy Server is starting...\n");
+	printf("starting the proxy...\n");
 	
-	// checking if the cache directory exists
-	if (stat("./URLCache/", &st) == -1) {
-		mkdir("./URLCache/", 0700);
+    //Creating a directory for cache
+	if (stat("./CacheDir/", &st) == -1) {
+		mkdir("./CacheDir/", 0700);
 	}
    
 	bzero((char*)&serv_addr, sizeof(serv_addr));
@@ -49,52 +52,56 @@ int main(int argc, char **argv)
 	serv_addr.sin_port = htons(atoi(argv[1]));
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
    
-	// creating the listening socket for our proxy server
-	sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if(sockfd < 0)
+	//Initializing sockets and binding
+    socket_id = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if(socket_id < 0)
 	{
-		perror("failed to initialize socket");
+		perror("failed to initialize given socket");
 	}
    
-	// binding our socket to the given port
-	if(bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	if(bind(socket_id, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{
-		perror("failed to bind to socket");
+		perror("failed to bind socket to process");
 	}
 
-	listen(sockfd, 50);
+	listen(socket_id, 50); // listen for requests
 	
 accepting:
-	newsockfd = accept(sockfd, (struct sockaddr*)&cli_addr, &clilen);
+	newsocket_id = accept(socket_id, (struct sockaddr*)&cli_addr, &clilen); // accepting requests
 	
-	if((chpid = fork()) == 0)
+    
+    //multithreading
+	if((proc_id = fork()) == 0)
 	{
 		struct sockaddr_in host_addr;
-		int i, n;			// loop indices
-		int rsockfd;		// remote socket file descriptor
-		int cfd;			// cache-file file descriptor
+		int i, n;
+		int rsocket_id;
+		int cfd;
+		int port = 80;
+		char type[256];
+		char url[4096];
+		char proto[256];
 		
-		int port = 80;		// default http port - can be overridden	
-		char type[256];		// type of request - e.g. GET/POST/HEAD
-		char url[4096];		// url in request - e.g. facebook.com
-		char proto[256];	// protocol ver in request - e.g. HTTP/1.0
+		char datetime[256];
 		
-		char datetime[256];	// the date-time when we last cached a url
 		
-		char host_url[256], path_url[256];
+		char url_host[256], url_path[256];
 		
-		char url_encoded[4096];	// encoded url, used for cahce filenames
-		char filepath[256]; 	// used for cache file paths
+		char url_encoded[4096];
+        char filepath[256];
 		
-		char *dateptr;		// used to find the date-time in http response
-		char buffer[4096];	// buffer used for send/receive
-		int response_code;	// http response code - e.g. 200, 304, 301
+		char *dateptr;
+		char buffer[4096];
+		int response_code;
 		
-		bzero((char*)buffer, 4096);			// let's play it safe!
+		bzero((char*)buffer, 4096);
 		
-		recv(newsockfd, buffer, 4096, 0);
+		
+		recv(newsocket_id, buffer, 4096, 0);
+		
 		
 		sscanf(buffer, "%s %s %s", type, url, proto);
+		
 		
 		if(url[0] == '/')
 		{
@@ -102,42 +109,37 @@ accepting:
 			strcpy(url, buffer);
 		}
 		
-		printf("-> %s %s %s\n", type, url, proto);
 		
+		//Checking for validity of requested url
 		if((strncmp(type , "GET", 3) != 0) || ((strncmp(proto, "HTTP/1.1", 8) != 0) && (strncmp(proto, "HTTP/1.0", 8) != 0)))
 		{
-			printf("\t-> bad request format - we only accept HTTP GETs\n");
-			sprintf(buffer,"400 : BAD REQUEST\nONLY GET REQUESTS ARE ALLOWED");
-			send(newsockfd, buffer, strlen(buffer), 0);
+			
+			sprintf(buffer,"ERROR 400 : NOT A GET REQUEST");
+			send(newsocket_id, buffer, strlen(buffer), 0);
+			
+			
 			goto end;
 		}
 		
-		parse_url(url, host_url, &port, path_url);
+		parse_url(url, url_host, &port, url_path);
 		
 		url_encode(url, url_encoded);
-		
-		printf("\t-> host_url: %s\n", host_url);
-		printf("\t-> port: %d\n", port);
-		printf("\t-> path_url: %s\n", path_url);
-		printf("\t-> url_encoded: %s\n", url_encoded);
 
-		// BLACK LIST CHECK
-		for(i = 0; i < blacklisted_urls_len; i++)
+        //Filtering blacklisted URLs
+		for(i = 0; i < url_blacklist_len; i++)
 		{
-			// if url contains the black-listed word
-			if(NULL != strstr(url, blacklisted_urls[i]))
+			if(NULL != strstr(url, url_blacklist[i]))
 			{
-				printf("\t-> url in blacklist: %s\n", blacklisted_urls[i]);
-				sprintf(buffer,"400 : BAD REQUEST\nURL FOUND IN BLACKLIST\n%s", blacklisted_urls[i]);
-				send(newsockfd, buffer, strlen(buffer), 0);
+				sprintf(buffer,"ERROR : CANNOT ACCESS BLACKLISTED URL \n%s", url_blacklist[i]);
+				send(newsocket_id, buffer, strlen(buffer), 0);
 				
 				goto end;
 			}
 		}
 		
-		if((hostent = gethostbyname(host_url)) == NULL)
+		if((hostent = gethostbyname(url_host)) == NULL)
 		{
-			fprintf(stderr, "failed to resolve %s: %s\n", host_url, strerror(errno));
+			fprintf(stderr, "failed to resolve host %s: %s\n", url_host, strerror(errno));
 			goto end;
 		}
 		
@@ -146,25 +148,32 @@ accepting:
 		host_addr.sin_family = AF_INET;
 		bcopy((char*)hostent->h_addr, (char*)&host_addr.sin_addr.s_addr, hostent->h_length);
 
-		rsockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		rsocket_id = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		
-		if(rsockfd < 0)
+		if(rsocket_id < 0)
 		{
 			perror("failed to create remote socket");
 			goto end;
 		}
 				
-		if(connect(rsockfd, (struct sockaddr*)&host_addr, sizeof(struct sockaddr)) < 0)
+		if(connect(rsocket_id, (struct sockaddr*)&host_addr, sizeof(struct sockaddr)) < 0)
 		{
 			perror("failed to connect to remote server");
 			goto end;
 		}
 
-		printf("\t-> connected to host: %s w/ ip: %s\n", host_url, inet_ntoa(host_addr.sin_addr));
-				
-			goto request; 
+        //Adding to cache
+		sprintf(filepath, "./CacheDir/%s", url_encoded);
+		if (0 != access(filepath, 0)) {
+			sprintf(buffer,"GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", url_path, url_host);
+			goto request;
 		}
 		
+		sprintf(filepath, "./CacheDir/%s", url_encoded);
+		cfd = open (filepath, O_RDWR);
+		bzero((char*)buffer, 4096);
+		read(cfd, buffer, 4096);
+		close(cfd);
 		
 		dateptr = strstr(buffer, "Date:");
 		if(NULL != dateptr)
@@ -173,16 +182,13 @@ accepting:
 			bzero((char*)datetime, 256);
 			strncpy(datetime, &dateptr[6], 29);
 			
-			sprintf(buffer,"GET %s HTTP/1.0\r\nHost: %s\r\nIf-Modified-Since: %s\r\nConnection: close\r\n\r\n", path_url, host_url, datetime);
-			printf("\t-> conditional GET...\n");
-			printf("\t-> If-Modified-Since: %s\n", datetime);
+			sprintf(buffer,"GET %s HTTP/1.0\r\nHost: %s\r\nIf-Modified-Since: %s\r\nConnection: close\r\n\r\n", url_path, url_host, datetime);
 		} else {
-			sprintf(buffer,"GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", path_url, host_url);
-			printf("\t-> the response had no date field\n");
+			sprintf(buffer,"GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", url_path, url_host);
 		}
 
 request:
-		n = send(rsockfd, buffer, strlen(buffer), 0);
+		n = send(rsocket_id, buffer, strlen(buffer), 0);
 		
 		if(n < 0)
 		{
@@ -190,14 +196,14 @@ request:
 			goto end;
 		}
 
-do_cache:
+do_CacheDir: //updating cache files
 		cfd = -1;
 		
 		do
 		{
 			bzero((char*)buffer, 4096);
 			
-			n = recv(rsockfd, buffer, 4096, 0);
+			n = recv(rsocket_id, buffer, 4096, 0);
 			if(n > 0)
 			{
 				if(cfd == -1)
@@ -205,40 +211,71 @@ do_cache:
 					float ver;
 					sscanf(buffer, "HTTP/%f %d", &ver, &response_code);
 					
-					printf("\t-> response_code: %d\n", response_code);
-					}
-				
-				for(i = 0; i < blacklisted_words_len; i++)
-				{
-					if(NULL != strstr(buffer, blacklisted_words[i]))
+					if(response_code != 304)
 					{
-						printf("\t-> content in blacklist: %s\n", blacklisted_words[i]);
+						sprintf(filepath, "./CacheDir/%s", url_encoded);
+						if((cfd = open(filepath, O_RDWR|O_TRUNC|O_CREAT, S_IRWXU)) < 0)
+						{
+							perror("failed to create CacheDir file");
+							goto end;
+						}
+					} else {
+						goto from_CacheDir;
+					}
+				}
+                
+                //Filtering blacklisted content
+				for(i = 0; i < word_blacklist_len; i++)
+				{
+					if(NULL != strstr(buffer, word_blacklist[i]))
+					{
 						
 						close(cfd);
 						
-						sprintf(filepath, "./cache/%s", url_encoded);
+						sprintf(filepath, "./CacheDir/%s", url_encoded);
 						remove(filepath);
 						
-						sprintf(buffer,"400 : BAD REQUEST\nCONTENT FOUND IN BLACKLIST\n%s", blacklisted_words[i]);
-						send(newsockfd, buffer, strlen(buffer), 0);			goto end;
+						sprintf(buffer,"ERROR !!! CONTENT HAS BLACKLISTED WORD\n%s", word_blacklist[i]);
+						send(newsocket_id, buffer, strlen(buffer), 0);
+						goto end;
 					}
 				}
 				
+				write(cfd, buffer, n);
 			}
 		} while(n > 0);
-	
+		close(cfd);
+		
+
+from_CacheDir: //reading from cache files
+		
+		sprintf(filepath, "./CacheDir/%s", url_encoded);
+		if((cfd = open (filepath, O_RDONLY)) < 0)
+		{
+			perror("failed to open CacheDir file");
+			goto end;
+		}
+		do
+		{
+			bzero((char*)buffer, 4096);
+			n = read(cfd, buffer, 4096);
+			if(n > 0)
+			{
+				send(newsocket_id, buffer, n, 0);
+			}
+		} while(n > 0);
+		close(cfd);
+
 end:
-		printf("\t-> exiting...\n");
-		close(rsockfd);
-		close(newsockfd);
-		close(sockfd);
+		close(rsocket_id);
+		close(newsocket_id);
+		close(socket_id);
 		return 0;
 	} else {
-		close(newsockfd);
-		
-		goto accepting;
+		close(newsocket_id);
+        goto accepting;
 	}
 	
-	close(sockfd);
+	close(socket_id);
 	return 0;
 }
